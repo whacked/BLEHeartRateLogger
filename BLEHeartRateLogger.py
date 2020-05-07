@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 """
     BLEHeartRateLogger
@@ -24,7 +24,7 @@ import logging
 import sqlite3
 import pexpect
 import argparse
-import ConfigParser
+import configparser
 
 logging.basicConfig(format="%(asctime)-15s  %(message)s")
 log = logging.getLogger("BLEHeartRateLogger")
@@ -46,7 +46,7 @@ def parse_args():
     confpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "BLEHeartRateLogger.conf")
     if os.path.exists(confpath):
 
-        config = ConfigParser.SafeConfigParser()
+        config = configparser.ConfigParser()
         config.read([confpath])
         config = dict(config.items("config"))
 
@@ -54,7 +54,7 @@ def parse_args():
         # configuration of the parser.
         args = vars(parser.parse_args([]))
         err = False
-        for key in config.iterkeys():
+        for key in config:
             if key not in args:
                 log.error("Configuration file error: invalid key '" + key + "'.")
                 err = True
@@ -116,7 +116,7 @@ def insert_db(sq, res, period, min_ce=2, max_ce=60 * 2, grace_commit=2 / 3.):
         insert_db.commit_every = 5
 
     tstamp = int(time.time())
-    if res.has_key("rr"):
+    if "rr" in res:
         for rr in res["rr"]:
             sq.execute("INSERT INTO hrm VALUES (?, ?, ?)", (tstamp, res["hr"], rr))
     else:
@@ -240,12 +240,13 @@ def main(addr=None, sqlfile=None, gatttool="gatttool", check_battery=False, hr_h
             gt.sendline("char-desc")
 
             while 1:
+                t0 = time.time()
                 try:
-                    gt.expect(r"handle: (0x[0-9a-f]+), uuid: ([0-9a-f]{8})", timeout=10)
+                    gt.expect(r"handle: (0x[0-9a-f]+), uuid: ([0-9a-f]{8})", timeout=90)
                 except pexpect.TIMEOUT:
                     break
-                handle = gt.match.group(1)
-                uuid = gt.match.group(2)
+                handle = gt.match.group(1).decode('ascii')
+                uuid = gt.match.group(2).decode('ascii')
 
                 if uuid == "00002902" and hr_handle:
                     hr_ctl_handle = handle
@@ -299,7 +300,7 @@ def main(addr=None, sqlfile=None, gatttool="gatttool", check_battery=False, hr_h
 
             # Get data from gatttool
             datahex = gt.match.group(1).strip()
-            data = map(lambda x: int(x, 16), datahex.split(' '))
+            data = [int(x, 16) for x in datahex.decode('ascii').split(' ')]
             res = interpret(data)
 
             log.debug(res)
